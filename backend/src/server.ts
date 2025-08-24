@@ -51,22 +51,9 @@ app.use(express.json());
 const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
 console.log('Environment check - isVercel:', isVercel, 'NODE_ENV:', process.env.NODE_ENV, 'VERCEL:', process.env.VERCEL);
 
-const upload = multer({
-  storage: isVercel
-    ? (console.log('Using memory storage for Vercel'), multer.memoryStorage()) // Use memory storage in Vercel/production
-    : (console.log('Using disk storage for local development'), multer.diskStorage({
-        destination: (req, file, cb) => {
-          const uploadDir = path.join(__dirname, '../uploads');
-          if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-          }
-          cb(null, uploadDir);
-        },
-        filename: (req, file, cb) => {
-          cb(null, `${Date.now()}-${file.originalname}`);
-        }
-      }),
-  fileFilter: (req, file, cb) => {
+// Create multer configuration based on environment
+const multerConfig: any = {
+  fileFilter: (req: any, file: any, cb: any) => {
     console.log('File received:', file.originalname, 'Type:', file.mimetype);
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -78,7 +65,28 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // Reduce to 10MB for Vercel
     fieldSize: 10 * 1024 * 1024
   }
-});
+};
+
+if (isVercel) {
+  console.log('Using memory storage for Vercel');
+  multerConfig.storage = multer.memoryStorage();
+} else {
+  console.log('Using disk storage for local development');
+  multerConfig.storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${file.originalname}`);
+    }
+  });
+}
+
+const upload = multer(multerConfig);
 
 // Routes
 app.post('/api/analyze', upload.single('policyFile'), async (req, res) => {
