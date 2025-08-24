@@ -48,10 +48,13 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Configure multer for file uploads - Vercel-friendly
+const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
+console.log('Environment check - isVercel:', isVercel, 'NODE_ENV:', process.env.NODE_ENV, 'VERCEL:', process.env.VERCEL);
+
 const upload = multer({
-  storage: process.env.NODE_ENV === 'production' 
-    ? multer.memoryStorage() // Use memory storage in production (Vercel)
-    : multer.diskStorage({
+  storage: isVercel
+    ? (console.log('Using memory storage for Vercel'), multer.memoryStorage()) // Use memory storage in Vercel/production
+    : (console.log('Using disk storage for local development'), multer.diskStorage({
         destination: (req, file, cb) => {
           const uploadDir = path.join(__dirname, '../uploads');
           if (!fs.existsSync(uploadDir)) {
@@ -113,8 +116,8 @@ app.post('/api/analyze', upload.single('policyFile'), async (req, res) => {
 
     let highlightedPdfUrl = null;
     
-    // Skip PDF highlighting in production (Vercel serverless limitations)
-    if (process.env.NODE_ENV !== 'production' && analysisResults.redFlags.length > 0 && req.file.path) {
+    // Skip PDF highlighting in Vercel (serverless limitations)
+    if (!isVercel && analysisResults.redFlags.length > 0 && req.file.path) {
       try {
         const highlightedPath = path.join(__dirname, '../uploads', `highlighted-${req.file.filename}`);
         console.log('Creating highlighted PDF at:', highlightedPath);
