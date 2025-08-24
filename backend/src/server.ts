@@ -47,31 +47,34 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads');
-    // Create the uploads directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
-});
-
+// Configure multer for file uploads - Vercel-friendly
 const upload = multer({
-  storage,
+  storage: process.env.NODE_ENV === 'production' 
+    ? multer.memoryStorage() // Use memory storage in production (Vercel)
+    : multer.diskStorage({
+        destination: (req, file, cb) => {
+          const uploadDir = path.join(__dirname, '../uploads');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          cb(null, uploadDir);
+        },
+        filename: (req, file, cb) => {
+          cb(null, `${Date.now()}-${file.originalname}`);
+        }
+      }),
   fileFilter: (req, file, cb) => {
+    console.log('File received:', file.originalname, 'Type:', file.mimetype);
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
     } else {
       cb(new Error('Only PDF files are allowed'));
     }
   },
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // Reduce to 10MB for Vercel
+    fieldSize: 10 * 1024 * 1024
+  }
 });
 
 // Routes
@@ -86,8 +89,17 @@ app.post('/api/analyze', upload.single('policyFile'), async (req, res) => {
 
     console.log('File uploaded:', req.file.originalname, 'Size:', req.file.size);
     
-    const pdfBuffer = fs.readFileSync(req.file.path);
-    console.log('PDF buffer read, size:', pdfBuffer.length);
+    // Handle both memory and disk storage
+    let pdfBuffer: Buffer;
+    if (req.file.buffer) {
+      // Memory storage (production)
+      pdfBuffer = req.file.buffer;
+      console.log('Using memory buffer, size:', pdfBuffer.length);
+    } else {
+      // Disk storage (development)
+      pdfBuffer = fs.readFileSync(req.file.path);
+      console.log('Read from disk, size:', pdfBuffer.length);
+    }
     
     const pdfData = await pdfParse(pdfBuffer);
     console.log('PDF parsed, text length:', pdfData.text.length);
@@ -101,8 +113,8 @@ app.post('/api/analyze', upload.single('policyFile'), async (req, res) => {
 
     let highlightedPdfUrl = null;
     
-    // If red flags found, create highlighted PDF
-    if (analysisResults.redFlags.length > 0) {
+    // Skip PDF highlighting in production (Vercel serverless limitations)
+    if (process.env.NODE_ENV !== 'production' && analysisResults.redFlags.length > 0 && req.file.path) {
       try {
         const highlightedPath = path.join(__dirname, '../uploads', `highlighted-${req.file.filename}`);
         console.log('Creating highlighted PDF at:', highlightedPath);
@@ -126,8 +138,10 @@ app.post('/api/analyze', upload.single('policyFile'), async (req, res) => {
       }
     }
 
-    // Delete the original uploaded file after processing
-    fs.unlinkSync(req.file.path);
+    // Delete the original uploaded file after processing (only if it exists on disk)
+    if (req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
 
     res.json({
       ...analysisResults,
