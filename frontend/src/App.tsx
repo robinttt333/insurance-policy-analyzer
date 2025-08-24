@@ -38,7 +38,10 @@ const App: React.FC = () => {
       const formData = new FormData();
       formData.append('policyFile', file);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/analyze`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 
+                    (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
+      
+      const response = await fetch(`${apiUrl}/api/analyze`, {
         method: 'POST',
         body: formData,
       });
