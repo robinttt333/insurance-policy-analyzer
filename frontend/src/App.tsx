@@ -22,7 +22,6 @@ interface RedFlag {
 interface AnalysisResults {
   redFlags: RedFlag[];
   summary: string;
-  highlightedPdfUrl?: string;
 }
 
 const App: React.FC = () => {
