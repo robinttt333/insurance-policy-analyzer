@@ -69,7 +69,6 @@ const InfoBanner: React.FC = () => {
                       <li>• AI-powered analysis in seconds</li>
                       <li>• Highlight problematic clauses</li>
                       <li>• Plain English explanations</li>
-                      <li>• Downloadable annotated PDF</li>
                     </ul>
                   </div>
                 </div>
